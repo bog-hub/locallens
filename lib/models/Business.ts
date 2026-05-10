@@ -104,7 +104,7 @@ const BusinessSchema = new Schema<IBusiness>(
       city:    { type: String, required: true },
       state:   { type: String, required: true },
       zip:     String,
-      country: { type: String, default: 'US' },
+      country: { type: String, default: 'MA' },
     },
 
     location: {
