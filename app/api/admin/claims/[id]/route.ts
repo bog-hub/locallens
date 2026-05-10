@@ -95,9 +95,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           status:   { $in: ['pending', 'verified'] },
         },
         {
-          status:     'rejected',
-          reviewNote: 'Another claim was approved',
-          reviewedAt: new Date(),
+          status:          'rejected',
+          reviewNote:      'Another claim was approved',
+          reviewedAt:      new Date(),
+          lastRejectedAt:  new Date(),
         }
       );
 
