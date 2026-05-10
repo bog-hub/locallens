@@ -89,6 +89,7 @@ export async function POST(
       );
     }
 
+    // Check claim exists + current doc count before uploading
     const claim = await Claim.findOne({
       business: id,
       user:     session.user.id,
@@ -102,10 +103,8 @@ export async function POST(
       );
     }
 
-    // Guard: existing claims in DB may predate the documents field
-    if (!claim.documents) claim.documents = [];
-
-    if (claim.documents.length >= MAX_DOCS) {
+    const currentCount = claim.documents?.length ?? 0;
+    if (currentCount >= MAX_DOCS) {
       return NextResponse.json(
         { error: `Maximum ${MAX_DOCS} documents allowed per claim` },
         { status: 400 }
@@ -120,19 +119,22 @@ export async function POST(
       resource_type: 'auto',
     });
 
-    claim.documents.push({
-      url:        result.secure_url,
-      publicId:   result.public_id,
-      label,
-      mimeType:   file.type,
-      uploadedAt: new Date(),
-    });
-
-    await claim.save();
+    // Use $push — atomic, works even when documents field is absent in DB
+    const updated = await Claim.findOneAndUpdate(
+      { _id: claim._id },
+      { $push: { documents: {
+          url:        result.secure_url,
+          publicId:   result.public_id,
+          label,
+          mimeType:   file.type,
+          uploadedAt: new Date(),
+        }}},
+      { new: true }
+    );
 
     return NextResponse.json({
       success:   true,
-      documents: claim.documents,
+      documents: updated?.documents ?? [],
     }, { status: 201 });
 
   } catch (err) {
