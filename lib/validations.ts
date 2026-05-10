@@ -94,6 +94,27 @@ export const ReviewVoteSchema = z.object({
   reviewId: mongoId,
 });
 
+// ── Claim ──────────────────────────────────────────────────────────────────
+
+const moroccanPhoneRequired = z
+  .string()
+  .regex(/^\+?212[5-7]\d{8}$|^0[5-7]\d{8}$/, 'Invalid Moroccan phone number');
+
+export const ClaimSchema = z.discriminatedUnion('proofType', [
+  z.object({
+    proofType:  z.literal('email'),
+    proofValue: z
+      .string()
+      .email('Invalid email address')
+      .max(200)
+      .transform(v => v.toLowerCase().trim()),
+  }),
+  z.object({
+    proofType:  z.literal('phone'),
+    proofValue: moroccanPhoneRequired,
+  }),
+]);
+
 // ── Profile ────────────────────────────────────────────────────────────────
 
 export const ProfileUpdateSchema = z.object({
