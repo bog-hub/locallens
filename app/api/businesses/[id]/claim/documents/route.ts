@@ -102,6 +102,9 @@ export async function POST(
       );
     }
 
+    // Guard: existing claims in DB may predate the documents field
+    if (!claim.documents) claim.documents = [];
+
     if (claim.documents.length >= MAX_DOCS) {
       return NextResponse.json(
         { error: `Maximum ${MAX_DOCS} documents allowed per claim` },
@@ -167,7 +170,7 @@ export async function PATCH(
       );
     }
 
-    if (claim.documents.length === 0) {
+    if (!claim.documents?.length) {
       return NextResponse.json(
         { error: 'Upload at least one document before submitting' },
         { status: 400 }
