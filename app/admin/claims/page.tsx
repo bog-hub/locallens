@@ -14,7 +14,7 @@ async function getClaims(page: number, limit: number, status: string, city: stri
   // Base status filter — always only show pending/verified
   const statusFilter = status
     ? [status]
-    : ['pending', 'verified'];
+    : ['submitted'];
 
   const query: Record<string, any> = { status: { $in: statusFilter } };
 
@@ -123,9 +123,13 @@ export default async function AdminClaimsPage({
 
                   <div className="text-right flex-shrink-0">
                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                      claim.status === 'verified' ? 'bg-green-50 text-green-600' : 'bg-yellow-50 text-yellow-600'
+                      claim.status === 'submitted' ? 'bg-blue-50 text-blue-600'
+                      : claim.status === 'verified' ? 'bg-green-50 text-green-600'
+                      : 'bg-yellow-50 text-yellow-600'
                     }`}>
-                      {claim.status === 'verified' ? '✓ Code verified' : '⏳ Pending code'}
+                      {claim.status === 'submitted' ? '📄 Docs submitted'
+                      : claim.status === 'verified'  ? '✓ Code verified'
+                      : '⏳ Pending code'}
                     </span>
                     <p className="text-xs text-gray-400 mt-1">
                       {formatDistanceToNow(new Date(claim.createdAt), { addSuffix: true })}
@@ -149,12 +153,34 @@ export default async function AdminClaimsPage({
                     </div>
                   )}
                   <div className="ml-auto">
-                    {claim.status === 'verified' ? (
+                    {claim.status === 'submitted' ? (
                       <AdminClaimActions claimId={claim._id} />
                     ) : (
-                      <span className="text-xs text-gray-400 italic">Waiting for user to verify code</span>
+                      <span className="text-xs text-gray-400 italic">
+                        {claim.status === 'verified' ? 'Waiting for user to upload documents' : 'Waiting for user to verify code'}
+                      </span>
                     )}
                   </div>
+                  {claim.documents?.length > 0 && (
+                    <div className="w-full mt-2 pt-2 border-t border-gray-50">
+                      <span className="text-xs text-gray-400 uppercase tracking-wider block mb-1.5">Documents ({claim.documents.length})</span>
+                      <div className="flex flex-wrap gap-2">
+                        {claim.documents.map((doc: any, i: number) => (
+                          <a
+                            key={i}
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 hover:bg-brand-50 hover:border-brand-300 transition-colors"
+                          >
+                            <span>{doc.mimeType === 'application/pdf' ? '📄' : '🖼️'}</span>
+                            <span className="font-medium text-gray-700">{doc.label}</span>
+                            <span className="text-gray-400">↗</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -5,9 +5,10 @@ import { useRef, useState } from 'react';
 import { MapPin, X } from 'lucide-react';
 
 const STATUS_OPTIONS = [
-  { value: '',         label: 'All statuses'       },
-  { value: 'pending',  label: '⏳ Pending code'    },
-  { value: 'verified', label: '✓ Code verified'    },
+  { value: '',          label: 'All statuses'        },
+  { value: 'submitted', label: '📄 Docs submitted'   },
+  { value: 'verified',  label: '✓ Code verified'     },
+  { value: 'pending',   label: '⏳ Pending code'     },
 ];
 
 const LIMIT_OPTIONS = [10, 20, 50, 100];
