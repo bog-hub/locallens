@@ -1,26 +1,115 @@
+/* app/globals.css */
+
+/* 1. Import Tailwind v4 — replaces @tailwind base/components/utilities */
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ─── 2. Theme ────────────────────────────────────────────────────────────────
+   Define all design tokens here. These become CSS variables AND Tailwind
+   utilities automatically. e.g. bg-brand-500, text-brand-500, etc.
+─────────────────────────────────────────────────────────────────────────────*/
+@theme {
+  /* Brand red palette */
+  --color-brand-50:  #fff5f5;
+  --color-brand-100: #ffe0e0;
+  --color-brand-200: #ffc5c5;
+  --color-brand-300: #ff9e9e;
+  --color-brand-400: #ff6b6b;
+  --color-brand-500: #ff3b3b;
+  --color-brand-600: #ed1515;
+  --color-brand-700: #c80d0d;
+  --color-brand-800: #a50f0f;
+  --color-brand-900: #881414;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Typography */
+  --font-display: 'Playfair Display', serif;
+  --font-body:    'Nunito', sans-serif;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  /* Custom animations */
+  --animate-fade-in:  fadeIn  0.25s ease-in-out;
+  --animate-slide-up: slideUp 0.35s ease-out;
+
+  /* Keyframes — defined inside @theme in v4 */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(12px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
   }
 }
 
+/* ─── 3. Base styles ──────────────────────────────────────────────────────────
+   In v4 you can just write plain CSS here — Tailwind's preflight (reset)
+   is already included via @import "tailwindcss" above.
+─────────────────────────────────────────────────────────────────────────────*/
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+  background-color: var(--color-gray-50);
+  color: var(--color-gray-900);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* ─── 4. Custom utilities ─────────────────────────────────────────────────────
+   @utility replaces the old @layer components / @layer utilities pattern.
+   These become real Tailwind classes you can use in JSX.
+─────────────────────────────────────────────────────────────────────────────*/
+@utility btn-primary {
+  background-color: var(--color-brand-500);
+  color: #fff;
+  font-weight: 600;
+  padding-inline: 1.25rem;
+  padding-block: 0.625rem;
+  border-radius: 0.75rem;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+
+  &:hover  { background-color: var(--color-brand-600); }
+  &:active { background-color: var(--color-brand-700); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+@utility btn-secondary {
+  border: 1px solid var(--color-gray-200);
+  color: var(--color-gray-700);
+  font-weight: 500;
+  padding-inline: 1.25rem;
+  padding-block: 0.625rem;
+  border-radius: 0.75rem;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+
+  &:hover { background-color: var(--color-gray-50); }
+}
+
+@utility input {
+  width: 100%;
+  border: 1px solid var(--color-gray-200);
+  border-radius: 0.75rem;
+  padding-inline: 1rem;
+  padding-block: 0.625rem;
+  font-size: 0.875rem;
+  outline: none;
+  background-color: #fff;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+
+  &:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-500) 20%, transparent);
+    border-color: var(--color-brand-400);
+  }
+}
+
+@utility card {
+  background-color: #fff;
+  border-radius: 1rem;
+  border: 1px solid var(--color-gray-100);
+  padding: 1.25rem;
+}
+
+/* ─── 5. Custom scrollbar ─────────────────────────────────────────────────────*/
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-gray-300); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-gray-400); }
