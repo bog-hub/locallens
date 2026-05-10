@@ -1,12 +1,18 @@
 'use client';
 // components/ClaimBusinessButton.tsx
-import { useState } from 'react';
-import { Shield, CheckCircle, Loader2, X, Mail, Phone } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Shield, CheckCircle, Loader2, X, Mail, Phone, Upload, FileText, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
-type Step = 'idle' | 'form' | 'verify' | 'done';
+type Step = 'idle' | 'prepare' | 'form' | 'verify' | 'upload' | 'done';
+
+interface DocFile {
+  file:  File;
+  label: string;
+  id:    string;
+}
 
 interface Props {
   businessId: string;
@@ -24,12 +30,11 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
   const [proofValue, setProofValue] = useState('');
   const [claimId,    setClaimId]    = useState('');
   const [code,       setCode]       = useState('');
-  const [devCode,    setDevCode]    = useState(''); // only shown in dev
+  const [docs,       setDocs]       = useState<DocFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Already claimed by someone else
   if (isClaimed && !isOwner) return null;
 
-  // Current user is the owner
   if (isOwner) {
     return (
       <div className="flex items-center gap-1.5 text-sm text-green-600 font-medium">
@@ -38,7 +43,14 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
     );
   }
 
-  // Step 1: submit claim with proof of contact
+  function reset() {
+    setStep('idle');
+    setCode('');
+    setProofValue('');
+    setClaimId('');
+    setDocs([]);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!session?.user) { router.push('/login'); return; }
@@ -55,7 +67,6 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
       if (!res.ok) throw new Error(data.error);
 
       setClaimId(data.claimId);
-      if (data._devCode) setDevCode(data._devCode); // dev only
       setStep('verify');
       toast.success(data.message);
     } catch (err: any) {
@@ -65,7 +76,6 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
     }
   }
 
-  // Step 2: enter verification code
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
     if (!code.trim()) { toast.error('Enter the verification code'); return; }
@@ -80,9 +90,8 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setStep('done');
-      toast.success(data.message);
-      router.refresh();
+      setStep('upload');
+      toast.success('Code verified! Now upload your ownership documents.');
     } catch (err: any) {
       toast.error(err.message ?? 'Verification failed');
     } finally {
@@ -90,13 +99,77 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
     }
   }
 
-  // Idle state — just the button
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+
+    if (docs.length >= 3) { toast.error('Maximum 3 documents allowed'); return; }
+    if (selected.size > 5 * 1024 * 1024) { toast.error('File must be under 5MB'); return; }
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!allowed.includes(selected.type)) {
+      toast.error('Accepted formats: PDF, JPEG, PNG, WebP');
+      return;
+    }
+
+    setDocs(prev => [...prev, { file: selected, label: '', id: crypto.randomUUID() }]);
+    e.target.value = '';
+  }
+
+  function updateLabel(id: string, label: string) {
+    setDocs(prev => prev.map(d => d.id === id ? { ...d, label } : d));
+  }
+
+  function removeDoc(id: string) {
+    setDocs(prev => prev.filter(d => d.id !== id));
+  }
+
+  async function handleUploadAndSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (docs.length === 0) { toast.error('Upload at least one document'); return; }
+
+    const unlabeled = docs.find(d => !d.label.trim());
+    if (unlabeled) { toast.error('Add a label to each document'); return; }
+
+    setLoading(true);
+    try {
+      for (const doc of docs) {
+        const fd = new FormData();
+        fd.append('file',  doc.file);
+        fd.append('label', doc.label.trim());
+
+        const res  = await fetch(`/api/businesses/${businessId}/claim/documents`, {
+          method: 'POST',
+          body:   fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+      }
+
+      const finalRes  = await fetch(`/api/businesses/${businessId}/claim/documents`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const finalData = await finalRes.json();
+      if (!finalRes.ok) throw new Error(finalData.error);
+
+      setStep('done');
+      toast.success(finalData.message);
+      router.refresh();
+    } catch (err: any) {
+      toast.error(err.message ?? 'Upload failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (step === 'idle') {
     return (
       <button
         onClick={() => {
           if (!session?.user) { router.push('/login'); return; }
-          setStep('form');
+          setStep('prepare');
         }}
         className="flex items-center gap-2 btn-secondary text-sm"
       >
@@ -105,7 +178,6 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
     );
   }
 
-  // Done state
   if (step === 'done') {
     return (
       <div className="flex items-center gap-2 text-sm text-blue-600 font-medium bg-blue-50
@@ -116,42 +188,87 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
     );
   }
 
-  // Modal overlay for form + verify steps
+  const stepTitles: Record<Exclude<Step, 'idle' | 'done'>, string> = {
+    prepare: 'Before You Start',
+    form:    'Claim This Business',
+    verify:  'Enter Verification Code',
+    upload:  'Upload Ownership Documents',
+  };
+
+  const stepDescriptions: Record<Exclude<Step, 'idle' | 'done'>, string> = {
+    prepare: 'Have these ready before you begin.',
+    form:    'Provide a contact method associated with this business.',
+    verify:  `We sent a 6-digit code to ${proofValue}.`,
+    upload:  'Upload at least 1 document (max 3). Label each one.',
+  };
+
   return (
     <>
       <button
-        onClick={() => setStep('form')}
+        onClick={() => setStep('prepare')}
         className="flex items-center gap-2 btn-secondary text-sm"
       >
         <Shield className="w-4 h-4" /> Claim This Business
       </button>
 
-      {/* Modal */}
       <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-slide-up">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-slide-up max-h-[90vh] overflow-y-auto">
 
-          {/* Header */}
           <div className="flex items-start justify-between mb-5">
             <div>
               <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
                 <Shield className="w-5 h-5 text-brand-500" />
-                {step === 'form' ? 'Claim This Business' : 'Enter Verification Code'}
+                {stepTitles[step as Exclude<Step, 'idle' | 'done'>]}
               </h3>
               <p className="text-sm text-gray-400 mt-0.5">
-                {step === 'form'
-                  ? 'Provide a contact method associated with this business.'
-                  : `We sent a 6-digit code to ${proofValue}.`}
+                {stepDescriptions[step as Exclude<Step, 'idle' | 'done'>]}
               </p>
             </div>
             <button
-              onClick={() => { setStep('idle'); setCode(''); setProofValue(''); setDevCode(''); }}
-              className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors"
+              onClick={reset}
+              className="p-1.5 rounded-xl hover:bg-gray-100 text-gray-400 transition-colors flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Step 1: contact form */}
+          {step === 'prepare' && (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm space-y-2">
+                <p className="font-semibold text-amber-800">Prepare at least one of:</p>
+                <ul className="space-y-1.5 text-amber-700">
+                  {[
+                    'Registre de Commerce',
+                    'Identification Fiscale',
+                    'Utility bill showing business address',
+                    'Government-issued ID (owner)',
+                    'Bank statement with business name',
+                  ].map((doc) => (
+                    <li key={doc} className="flex items-start gap-2">
+                      <span className="mt-0.5">📄</span>
+                      <span>{doc}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4 text-xs text-gray-500 space-y-1">
+                <p className="font-semibold text-gray-700">How it works:</p>
+                <p>1. Verify your contact info with a 6-digit code</p>
+                <p>2. Upload your ownership documents (PDF, JPG, PNG · max 5MB each)</p>
+                <p>3. Our team reviews and approves within 24h</p>
+                <p>4. You get an email when your listing is activated</p>
+              </div>
+
+              <button
+                onClick={() => setStep('form')}
+                className="btn-primary w-full flex items-center justify-center gap-2"
+              >
+                I&apos;m ready — continue
+              </button>
+            </div>
+          )}
+
           {step === 'form' && (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -185,7 +302,7 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
                   value={proofValue}
                   onChange={(e) => setProofValue(e.target.value)}
                   type={proofType === 'email' ? 'email' : 'tel'}
-                  placeholder={proofType === 'email' ? 'info@yourbusiness.com' : '+1 (415) 555-0100'}
+                  placeholder={proofType === 'email' ? 'info@yourbusiness.com' : '0612345678'}
                   required
                   className="input"
                 />
@@ -194,39 +311,20 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
                 </p>
               </div>
 
-              {/* What happens next */}
-              <div className="bg-gray-50 rounded-xl p-4 text-xs text-gray-500 space-y-1.5">
-                <p className="font-semibold text-gray-700">What happens next:</p>
-                <p>1. We send a verification code to the contact provided</p>
-                <p>2. Enter the code to confirm you have access</p>
-                <p>3. Our team reviews and approves the claim (usually within 24h)</p>
-                <p>4. You receive an email when your listing is activated</p>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full flex items-center justify-center gap-2"
-              >
+              <button type="submit" disabled={loading}
+                className="btn-primary w-full flex items-center justify-center gap-2">
                 {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</> : 'Send Verification Code'}
+              </button>
+
+              <button type="button" onClick={() => setStep('prepare')}
+                className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors">
+                ← Back
               </button>
             </form>
           )}
 
-          {/* Step 2: enter code */}
           {step === 'verify' && (
             <form onSubmit={handleVerify} className="space-y-4">
-              {/* Dev helper */}
-              {devCode && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm">
-                  <p className="font-semibold text-yellow-700 mb-0.5">Development mode</p>
-                  <p className="text-yellow-600">
-                    Your code: <span className="font-mono font-bold tracking-widest">{devCode}</span>
-                  </p>
-                  <p className="text-xs text-yellow-500 mt-1">This banner won't appear in production.</p>
-                </div>
-              )}
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   6-digit verification code
@@ -240,24 +338,75 @@ export default function ClaimBusinessButton({ businessId, isClaimed, isOwner }: 
                   className="input text-center text-2xl font-mono tracking-widest py-4"
                 />
                 <p className="text-xs text-gray-400 mt-1.5 text-center">
-                  Code sent to {proofValue} · expires in 24 hours
+                  Code sent to {proofValue} · expires in 15 minutes
                 </p>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading || code.length !== 6}
-                className="btn-primary w-full flex items-center justify-center gap-2"
-              >
-                {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</> : 'Confirm & Submit Claim'}
+              <button type="submit" disabled={loading || code.length !== 6}
+                className="btn-primary w-full flex items-center justify-center gap-2">
+                {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</> : 'Verify Code'}
               </button>
 
-              <button
-                type="button"
-                onClick={() => { setStep('form'); setCode(''); }}
-                className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors"
-              >
+              <button type="button" onClick={() => { setStep('form'); setCode(''); }}
+                className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors">
                 ← Use a different contact method
+              </button>
+            </form>
+          )}
+
+          {step === 'upload' && (
+            <form onSubmit={handleUploadAndSubmit} className="space-y-4">
+              {docs.length > 0 && (
+                <div className="space-y-2">
+                  {docs.map((doc) => (
+                    <div key={doc.id} className="flex items-center gap-2 bg-gray-50 rounded-xl p-3">
+                      <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-500 truncate">{doc.file.name}</p>
+                        <input
+                          value={doc.label}
+                          onChange={(e) => updateLabel(doc.id, e.target.value)}
+                          placeholder="Label (e.g. Registre de Commerce)"
+                          maxLength={100}
+                          className="mt-1 w-full text-sm border border-gray-200 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-brand-200"
+                        />
+                      </div>
+                      <button type="button" onClick={() => removeDoc(doc.id)}
+                        className="p-1 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {docs.length < 3 && (
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-gray-200 rounded-xl py-4 text-sm text-gray-400
+                             hover:border-brand-300 hover:text-brand-500 transition-colors flex items-center justify-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  {docs.length === 0 ? 'Add document' : 'Add another document'}
+                  <span className="text-xs">({docs.length}/3)</span>
+                </button>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+
+              <p className="text-xs text-gray-400 text-center">
+                PDF, JPEG, PNG, WebP · Max 5MB each
+              </p>
+
+              <button type="submit" disabled={loading || docs.length === 0}
+                className="btn-primary w-full flex items-center justify-center gap-2">
+                {loading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading…</>
+                  : `Submit Claim with ${docs.length} Document${docs.length !== 1 ? 's' : ''}`}
               </button>
             </form>
           )}
