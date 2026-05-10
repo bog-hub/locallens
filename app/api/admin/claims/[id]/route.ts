@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Claim not found' }, { status: 404 });
     }
 
-    if (claim.status !== 'verified') {
+    if (claim.status !== 'submitted') {
       return NextResponse.json(
         { error: `Cannot ${action} a claim with status "${claim.status}"` },
         { status: 400 }
