@@ -19,6 +19,7 @@ export interface IClaim extends Document {
   reviewedBy?:     mongoose.Types.ObjectId;
   reviewedAt?:     Date;
   createdAt:       Date;
+  updatedAt:       Date;
 }
 
 const ClaimSchema = new Schema<IClaim>(
@@ -29,12 +30,13 @@ const ClaimSchema = new Schema<IClaim>(
       type:    String,
       enum:    ['pending', 'verified', 'approved', 'rejected', 'locked'],
       default: 'pending',
+      required: true,
     },
     proofType:       { type: String, enum: ['phone', 'email'], required: true },
     proofValue:      { type: String, required: true },
-    codeHash:        { type: String, required: true },
+    codeHash:        { type: String, required: true, select: false },
     verifyExpiry:    { type: Date,   required: true },
-    attempts:        { type: Number, default: 0 },
+    attempts:        { type: Number, default: 0, min: 0, max: 10 },
     verifiedAt:      Date,
     lastRejectedAt:  Date,
     reviewNote:      String,
@@ -48,5 +50,10 @@ ClaimSchema.index({ business: 1, status: 1 });
 ClaimSchema.index({ business: 1, user: 1, status: 1 });
 // For cooldown queries
 ClaimSchema.index({ user: 1, status: 1, lastRejectedAt: 1 });
+// TTL index for auto-deletion of stale pending/locked claims after OTP window expires
+ClaimSchema.index(
+  { verifyExpiry: 1 },
+  { expireAfterSeconds: 0, partialFilterExpression: { status: { $in: ['pending', 'locked'] } } }
+);
 
 export const Claim = models.Claim || model<IClaim>('Claim', ClaimSchema);
