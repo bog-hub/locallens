@@ -73,12 +73,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const claimBusiness = claim.business as any;
 
     if (action === 'approve') {
-      // ── Set the business owner ──
-      await Business.findByIdAndUpdate(claimBusiness._id, {
-        owner:      claimUser._id,
-        isClaimed:  true,
-        isVerified: true,
-      });
+      // ── Atomic update: only set owner if not already claimed ──
+      const updatedBusiness = await Business.findOneAndUpdate(
+        { _id: claimBusiness._id, isClaimed: false },
+        { owner: claimUser._id, isClaimed: true, isVerified: true },
+        { new: true }
+      );
+
+      if (!updatedBusiness) {
+        return NextResponse.json(
+          { error: 'Business has already been claimed by another process' },
+          { status: 409 }
+        );
+      }
 
       // ── Reject any other pending claims for this business ──
       await Claim.updateMany(
@@ -115,10 +122,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       console.log(`[Admin] ${session.user.email} approved claim for "${claimBusiness.name}" → ${claimUser.email}`);
 
     } else {
-      claim.status     = 'rejected';
-      claim.reviewNote = reviewNote;
-      claim.reviewedBy = session.user.id as any;
-      claim.reviewedAt = new Date();
+      claim.status          = 'rejected';
+      claim.reviewNote      = reviewNote;
+      claim.reviewedBy      = session.user.id as any;
+      claim.reviewedAt      = new Date();
+      claim.lastRejectedAt  = new Date();
       await claim.save();
 
       // ── Notify the user by email ──
@@ -137,8 +145,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     return NextResponse.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('[PATCH /api/admin/claims/[id]]', err);
-    return NextResponse.json({ error: err.message ?? 'Failed to process claim' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to process claim' }, { status: 500 });
   }
 }
