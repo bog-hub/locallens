@@ -115,6 +115,10 @@ export const ClaimSchema = z.discriminatedUnion('proofType', [
   }),
 ]);
 
+export const ClaimDocumentUploadSchema = z.object({
+  label: z.string().min(1, 'Label is required').max(100).trim(),
+});
+
 // ── Profile ────────────────────────────────────────────────────────────────
 
 export const ProfileUpdateSchema = z.object({
@@ -130,6 +134,7 @@ export const ALLOWED_MIME_TYPES = [
   'image/png',
   'image/webp',
   'image/gif',
+  'application/pdf',
 ] as const;
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -140,6 +145,7 @@ export const MAGIC_BYTES: Record<string, number[]> = {
   'image/png':  [0x89, 0x50, 0x4e, 0x47],
   'image/webp': [0x52, 0x49, 0x46, 0x46], // RIFF header
   'image/gif':  [0x47, 0x49, 0x46],        // GIF
+  'application/pdf': [0x25, 0x50, 0x44, 0x46], // %PDF
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
