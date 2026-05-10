@@ -54,7 +54,7 @@ export async function sendVerificationCode(
       <p>Enter this code to verify:</p>
       <div class="code">${code}</div>
       <p style="color:#9ca3af;font-size:13px;text-align:center">
-        Expires in 24 hours · If you didn't request this, ignore this email.
+        Expires in 15 minutes · If you didn't request this, ignore this email.
       </p>
     `),
   });
